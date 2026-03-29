@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment
+.env
+.env.*
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# AgentPower data (user-specific, lives in ~/.agentpower/)
+# Nothing to ignore here — data dir is outside the repo
+
+# TypeScript
+*.tsbuildinfo
