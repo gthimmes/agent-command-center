@@ -45,6 +45,10 @@ export class AgentManager extends EventEmitter {
     if (!session) throw new Error(`Agent not found: ${agentId}`)
     if (session.status === 'running') throw new Error(`Agent is already running`)
 
+    // Ensure working directory exists
+    const { mkdirSync } = await import('fs')
+    mkdirSync(session.workdir, { recursive: true })
+
     // Add user message to session
     const userItem: ChatItem = { id: uuid(), kind: 'user', text, timestamp: Date.now() }
     session.chatItems.push(userItem)
