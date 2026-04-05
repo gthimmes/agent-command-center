@@ -3,6 +3,71 @@ import ReactMarkdown from 'react-markdown'
 import type { AgentSession } from '../types.ts'
 import { ToolCallBlock } from './ToolCallBlock.tsx'
 
+/**
+ * Override ReactMarkdown's URL sanitizer to allow file:// protocol.
+ * Default only allows http, https, irc, mailto, xmpp.
+ */
+function urlTransform(url: string): string {
+  const safeProtocol = /^(https?|ircs?|mailto|xmpp|file)$/i
+  const colon = url.indexOf(':')
+  const questionMark = url.indexOf('?')
+  const numberSign = url.indexOf('#')
+  const slash = url.indexOf('/')
+  if (
+    colon === -1 ||
+    (slash !== -1 && colon > slash) ||
+    (questionMark !== -1 && colon > questionMark) ||
+    (numberSign !== -1 && colon > numberSign) ||
+    safeProtocol.test(url.slice(0, colon))
+  ) {
+    return url
+  }
+  return ''
+}
+
+/** Custom markdown components — open all links in new tab */
+const markdownComponents = {
+  a: ({ href, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      {...props}
+    >
+      {children}
+    </a>
+  ),
+}
+
+/**
+ * Pre-process text to wrap bare URLs and file paths in markdown link syntax.
+ * Runs before ReactMarkdown so they become <a> tags.
+ */
+function linkifyText(text: string): string {
+  // Linkify http/https URLs not already in markdown link syntax
+  let result = text.replace(
+    /(https?:\/\/[^\s)>\]"]+)/g,
+    (match, _url, offset) => {
+      const before = result.slice(Math.max(0, offset - 2), offset)
+      if (before.endsWith('](') || before.endsWith('(')) return match
+      return `[${match}](${match})`
+    }
+  )
+  // Linkify Windows file paths like C:\foo\bar.html → file:///C:/foo/bar.html
+  result = result.replace(
+    /([A-Z]:\\[^\s*?"<>|`]+\.\w{1,10})/gi,
+    (match, _path, offset) => {
+      const before = result.slice(Math.max(0, offset - 2), offset)
+      if (before.endsWith('](') || before.endsWith('(')) return match
+      // Don't linkify if already inside a markdown link we just created
+      if (before.endsWith('[')) return match
+      const fileUrl = 'file:///' + match.replace(/\\/g, '/')
+      return `[${match}](${fileUrl})`
+    }
+  )
+  return result
+}
+
 function ThinkingIndicator() {
   return (
     <div className="flex items-center gap-2 py-2 text-slate-500 text-xs">
@@ -77,7 +142,7 @@ export function ChatMessages({ agent }: { agent: AgentSession }) {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-slate-200 text-sm leading-relaxed prose-agent">
-                  <ReactMarkdown>{item.text ?? ''}</ReactMarkdown>
+                  <ReactMarkdown components={markdownComponents} urlTransform={urlTransform}>{linkifyText(item.text ?? '')}</ReactMarkdown>
                 </div>
                 <div className="text-slate-700 text-xs mt-1">{formatTime(item.timestamp)}</div>
               </div>

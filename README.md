@@ -2,9 +2,19 @@
 
 **Your personal Agent Command Center.**
 
-AgentPower is a local web application that lets you manage multiple Claude Code agents working on different projects, on schedules, to keep work moving. It uses your own locally installed Claude CLI and auth token — no API keys to configure, no cloud dependency.
+AgentPower is a local web application that lets you manage multiple Claude Code agents working on different projects, on schedules, to keep work moving. It uses your own locally installed Claude CLI and auth token — no API keys to configure, no cloud dependency, no credentials in code.
 
-The vision: set up agents scoped to different repos and tasks, give them scheduled prompts, and let them work autonomously while you monitor progress from a single dashboard.
+## The Vision
+
+A single dashboard where you run a fleet of Claude agents, each scoped to its own project and goal. You define the work once — "review PRs on this repo", "triage new issues", "refactor the auth module" — schedule it, and let the agents execute autonomously while you monitor from one place.
+
+The goal is to turn Claude Code from a tool you babysit into a team of workers you orchestrate. You give them context and tasks; they get the work done. You check in when you want to.
+
+Key principles:
+- **Your credentials, your machine** — the app spawns your local `claude` CLI, never touches tokens directly
+- **Agents are independent** — each agent has its own working directory, conversation history, model, and schedule
+- **Durable by default** — sessions and schedules survive restarts; schedules auto-recover
+- **Real-time visibility** — watch every tool call, file edit, and bash command as it happens
 
 ## Getting Started
 
@@ -36,13 +46,16 @@ Open **http://localhost:5173** in your browser.
 
 ### Working Now
 - **Multi-agent management** — create and run multiple Claude agents, each with its own project directory, model, and system prompt
+- **Autonomous execution** — agents run headless with permissions pre-approved, so they can write files and run commands without blocking on prompts
+- **Auto-created workdirs** — specify any path when creating an agent; the directory is created on first use if it doesn't exist
 - **Real-time streaming** — watch agent output as it happens via WebSocket
 - **Tool call visualization** — see every file read, edit, bash command, and search agents perform
+- **Clickable links** — URLs and Windows file paths in agent responses are auto-detected and rendered as clickable hyperlinks (including `file://` paths to open local HTML in your browser)
 - **Interval-based scheduling** — automate agents with recurring prompts (30s, 5m, 2h, 1d intervals)
 - **Smart scheduling** — skips execution if agent is still running, auto-pauses if agent is deleted
 - **Schedule controls** — start, pause, trigger-now, and delete schedules per agent
 - **Session persistence** — agent conversations and schedules survive server restarts
-- **Session resumption** — agents continue previous Claude conversations (maintains context)
+- **Session resumption** — agents continue previous Claude conversations (maintains context across messages)
 - **Model selection** — choose between Sonnet, Opus, Haiku, or custom model IDs per agent
 - **Cost tracking** — monitor API spend per agent
 

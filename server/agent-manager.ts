@@ -58,7 +58,7 @@ export class AgentManager extends EventEmitter {
 
     // Build claude CLI command as a single string for shell execution
     const escapedText = text.replace(/"/g, '\\"')
-    let cmd = `claude -p "${escapedText}" --output-format stream-json --verbose --model ${session.model}`
+    let cmd = `claude -p "${escapedText}" --output-format stream-json --verbose --model ${session.model} --dangerously-skip-permissions`
 
     if (session.claudeSessionId) {
       cmd += ` --resume ${session.claudeSessionId}`

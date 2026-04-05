@@ -51,10 +51,13 @@ Frames are JSON with a `type` field.
 
 Each message spawns a shell command:
 ```
-claude -p "<text>" --output-format stream-json --verbose --model <model> [--resume <sessionId>]
+claude -p "<text>" --output-format stream-json --verbose --model <model> --dangerously-skip-permissions [--resume <sessionId>]
 ```
 
-Working directory is set via `cwd` on the child process spawn. All `CLAUDE*` environment variables are stripped from the child process to prevent "nested session" detection.
+- **`--dangerously-skip-permissions`** — required so agents can execute tools (file writes, bash, etc.) without interactive permission prompts. Since the CLI runs headless as a child process, there's no way for the user to respond to prompts.
+- **Working directory**: set via `cwd` on the child process spawn. If the directory doesn't exist, it's auto-created with `mkdirSync(workdir, { recursive: true })`.
+- **Env vars**: all `CLAUDE*` environment variables are stripped from the child process to prevent "nested session" detection (`CLAUDECODE`, `CLAUDE_CODE_ENTRYPOINT`, `CLAUDE_CODE_SESSION_ACCESS_TOKEN`).
+- **Session resumption**: once the first message captures a `session_id` from the `system.init` event, all subsequent messages are resumed with `--resume <sessionId>` so the agent maintains full conversation context.
 
 ### Scheduler
 
@@ -92,6 +95,14 @@ npm start            # Production server
 - Use `path` module (not hardcoded `/` or `\`) for file paths.
 - Use `os.homedir()` for user directory resolution.
 - All `CLAUDE*` env vars must be stripped from child processes to avoid nested session detection.
+
+## Markdown Rendering Notes
+
+Chat messages render through `ReactMarkdown` in `src/components/ChatMessages.tsx`. A few things worth knowing:
+
+- **`file://` URLs are sanitized by default** — ReactMarkdown only permits `http/https/irc/mailto/xmpp` out of the box. The custom `urlTransform` in `ChatMessages.tsx` whitelists `file` so agent-generated file paths can be opened.
+- **Bare URLs and Windows paths are linkified** — a `linkifyText()` pre-processor wraps `http(s)://...` and `C:\path\to\file.ext` in markdown link syntax before rendering. Windows paths become `file:///C:/path/to/file.ext`.
+- **Links open in new tabs** — the custom `a` component sets `target="_blank"` and `rel="noopener noreferrer"`.
 
 ## Current Limitations (To Be Addressed)
 
