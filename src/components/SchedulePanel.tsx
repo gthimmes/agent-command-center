@@ -47,8 +47,19 @@ function ScheduleItem({
         <span className="text-slate-200 text-xs font-medium truncate flex-1">{schedule.name}</span>
 
         <span className="text-slate-500 text-xs flex-shrink-0">
-          every {formatInterval(schedule.intervalMs)}
+          {schedule.mode === 'cron' && schedule.cronExpression
+            ? <code className="font-mono">{schedule.cronExpression}</code>
+            : <>every {formatInterval(schedule.intervalMs)}</>}
         </span>
+
+        {schedule.freshSessionPerRun && (
+          <span
+            title="Each run starts with a fresh Claude session (no context from prior runs)"
+            className="text-[9px] bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded-full flex-shrink-0"
+          >
+            fresh
+          </span>
+        )}
 
         <div className="flex items-center gap-1 flex-shrink-0">
           <button
@@ -112,18 +123,31 @@ function ScheduleItem({
   )
 }
 
+const CRON_PRESETS = [
+  { label: 'Every hour', value: '0 * * * *' },
+  { label: 'Daily 9am', value: '0 9 * * *' },
+  { label: 'Weekdays 9am', value: '0 9 * * 1-5' },
+  { label: 'Monday 9am', value: '0 9 * * 1' },
+  { label: 'Midnight', value: '0 0 * * *' },
+]
+
+type ScheduleFormMode = 'interval' | 'cron'
+
 function NewScheduleForm({
   agentId,
   onSubmit,
   onCancel,
 }: {
   agentId: string
-  onSubmit: (data: { agentId: string; prompt: string; interval: string; name?: string }) => void
+  onSubmit: (data: { agentId: string; prompt: string; interval?: string; cronExpression?: string; name?: string; freshSessionPerRun?: boolean }) => void
   onCancel: () => void
 }) {
   const [prompt, setPrompt] = useState('')
   const [interval, setInterval] = useState('30m')
+  const [cronExpr, setCronExpr] = useState('0 9 * * *')
+  const [mode, setMode] = useState<ScheduleFormMode>('interval')
   const [name, setName] = useState('')
+  const [freshSession, setFreshSession] = useState(true)
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -131,8 +155,10 @@ function NewScheduleForm({
     onSubmit({
       agentId,
       prompt: prompt.trim(),
-      interval: interval.trim() || '30m',
+      interval: mode === 'interval' ? (interval.trim() || '30m') : undefined,
+      cronExpression: mode === 'cron' ? cronExpr.trim() : undefined,
       name: name.trim() || undefined,
+      freshSessionPerRun: freshSession,
     })
   }
 
@@ -153,37 +179,112 @@ function NewScheduleForm({
         <textarea
           value={prompt}
           onChange={e => setPrompt(e.target.value)}
-          placeholder="What should the agent do each run?"
+          placeholder="What should the agent do each run? Supports {{date}}, {{last_run_summary}}, etc."
           rows={2}
           className="w-full bg-slate-800/60 border border-slate-700 rounded px-2 py-1.5 text-slate-200 text-xs placeholder-slate-600 outline-none focus:border-violet-500/60 transition-colors resize-y"
         />
+        <p className="text-slate-600 text-[10px] mt-1">
+          Variables: <code className="text-slate-500">{'{{date}}'}</code>{' '}
+          <code className="text-slate-500">{'{{time}}'}</code>{' '}
+          <code className="text-slate-500">{'{{day}}'}</code>{' '}
+          <code className="text-slate-500">{'{{agent_name}}'}</code>{' '}
+          <code className="text-slate-500">{'{{last_run_summary}}'}</code>{' '}
+          <code className="text-slate-500">{'{{last_run_status}}'}</code>{' '}
+          <code className="text-slate-500">{'{{run_count}}'}</code>
+        </p>
+      </div>
+
+      <div>
+        <div className="flex items-center gap-1 mb-1.5">
+          <button
+            type="button"
+            onClick={() => setMode('interval')}
+            className={`px-2 py-0.5 rounded text-[10px] transition-colors ${
+              mode === 'interval' ? 'bg-slate-700 text-slate-200' : 'text-slate-500 hover:text-slate-300'
+            }`}
+          >
+            Interval
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode('cron')}
+            className={`px-2 py-0.5 rounded text-[10px] transition-colors ${
+              mode === 'cron' ? 'bg-slate-700 text-slate-200' : 'text-slate-500 hover:text-slate-300'
+            }`}
+          >
+            Cron
+          </button>
+        </div>
+
+        {mode === 'interval' ? (
+          <>
+            <div className="flex gap-1.5 flex-wrap">
+              {['5m', '15m', '30m', '1h', '4h', '1d'].map(preset => (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => setInterval(preset)}
+                  className={`px-2 py-1 rounded text-xs transition-colors ${
+                    interval === preset
+                      ? 'bg-violet-600 text-white'
+                      : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                  }`}
+                >
+                  {preset}
+                </button>
+              ))}
+              <input
+                type="text"
+                value={interval}
+                onChange={e => setInterval(e.target.value)}
+                className="flex-1 bg-slate-800/60 border border-slate-700 rounded px-2 py-1 text-slate-200 text-xs placeholder-slate-600 outline-none focus:border-violet-500/60 transition-colors min-w-[60px]"
+                placeholder="e.g. 2h"
+              />
+            </div>
+            <p className="text-slate-600 text-xs mt-1">Supports: 30s, 5m, 2h, 1d — runs immediately, then on interval</p>
+          </>
+        ) : (
+          <>
+            <div className="flex gap-1 flex-wrap mb-2">
+              {CRON_PRESETS.map(p => (
+                <button
+                  key={p.value}
+                  type="button"
+                  onClick={() => setCronExpr(p.value)}
+                  className={`px-2 py-1 rounded text-[10px] transition-colors ${
+                    cronExpr === p.value
+                      ? 'bg-violet-600 text-white'
+                      : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            <input
+              type="text"
+              value={cronExpr}
+              onChange={e => setCronExpr(e.target.value)}
+              className="w-full bg-slate-800/60 border border-slate-700 rounded px-2 py-1.5 text-slate-200 text-xs font-mono placeholder-slate-600 outline-none focus:border-violet-500/60 transition-colors"
+              placeholder="e.g. 0 9 * * 1-5"
+            />
+            <p className="text-slate-600 text-[10px] mt-1">
+              Format: <code className="text-slate-500">min hour day month day-of-week</code>
+            </p>
+          </>
+        )}
       </div>
       <div>
-        <label className="block text-slate-400 text-xs mb-1">Interval</label>
-        <div className="flex gap-1.5">
-          {['5m', '15m', '30m', '1h', '4h', '1d'].map(preset => (
-            <button
-              key={preset}
-              type="button"
-              onClick={() => setInterval(preset)}
-              className={`px-2 py-1 rounded text-xs transition-colors ${
-                interval === preset
-                  ? 'bg-violet-600 text-white'
-                  : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-              }`}
-            >
-              {preset}
-            </button>
-          ))}
+        <label className="flex items-center gap-2 cursor-pointer">
           <input
-            type="text"
-            value={interval}
-            onChange={e => setInterval(e.target.value)}
-            className="flex-1 bg-slate-800/60 border border-slate-700 rounded px-2 py-1 text-slate-200 text-xs placeholder-slate-600 outline-none focus:border-violet-500/60 transition-colors min-w-[60px]"
-            placeholder="e.g. 2h"
+            type="checkbox"
+            checked={freshSession}
+            onChange={e => setFreshSession(e.target.checked)}
+            className="w-3 h-3 accent-violet-500"
           />
-        </div>
-        <p className="text-slate-600 text-xs mt-1">Supports: 30s, 5m, 2h, 1d</p>
+          <span className="text-slate-400 text-xs">Fresh session each run</span>
+          <span className="text-slate-600 text-xs">(recommended — prevents context bloat)</span>
+        </label>
       </div>
       <div className="flex gap-2 pt-1">
         <button
@@ -215,7 +316,7 @@ export function SchedulePanel({
 }: {
   agentId: string
   schedules: Schedule[]
-  onCreateSchedule: (data: { agentId: string; prompt: string; interval: string; name?: string }) => void
+  onCreateSchedule: (data: { agentId: string; prompt: string; interval?: string; cronExpression?: string; name?: string; freshSessionPerRun?: boolean }) => void
   onStartSchedule: (scheduleId: string) => void
   onPauseSchedule: (scheduleId: string) => void
   onDeleteSchedule: (scheduleId: string) => void

@@ -25,47 +25,104 @@ function urlTransform(url: string): string {
   return ''
 }
 
-/** Custom markdown components — open all links in new tab */
+/** Detect if a string is a URL or Windows file path, return it normalized, or null */
+function detectLink(text: string): string | null {
+  const trimmed = text.trim()
+  // http/https URL
+  if (/^https?:\/\/\S+$/i.test(trimmed)) return trimmed
+  // Windows path (C:\foo\bar.ext or C:/foo/bar.ext)
+  if (/^[A-Z]:[\\/][^\s*?"<>|]+$/i.test(trimmed)) return trimmed
+  return null
+}
+
+/** Open a URL or local file path via the server's /api/open endpoint. */
+async function openTarget(target: string) {
+  // http/https URLs: open in browser tab (no server round-trip needed)
+  if (/^https?:\/\//i.test(target)) {
+    window.open(target, '_blank', 'noopener,noreferrer')
+    return
+  }
+  // Local paths: ask the server to open with the OS default handler
+  try {
+    const res = await fetch('/api/open', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target }),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: 'Unknown error' }))
+      console.error('Failed to open:', err.error)
+      alert(`Could not open: ${err.error}`)
+    }
+  } catch (err) {
+    console.error('Failed to call /api/open:', err)
+  }
+}
+
+/** Custom markdown components — intercept link clicks to open via server */
 const markdownComponents = {
   a: ({ href, children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
     <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
+      data-testid="chat-link"
+      href={href ?? '#'}
+      onClick={(e) => {
+        e.preventDefault()
+        if (href) openTarget(href)
+      }}
       {...props}
     >
       {children}
     </a>
   ),
+  code: ({ className, children, ...props }: React.HTMLAttributes<HTMLElement> & { inline?: boolean }) => {
+    // Block code (with language class) — render normally
+    if (className) return <code className={className} {...props}>{children}</code>
+    // Inline code — check if it's a link
+    const text = typeof children === 'string' ? children : Array.isArray(children) ? children.join('') : ''
+    const target = detectLink(text)
+    if (target) {
+      return (
+        <a
+          data-testid="chat-link"
+          href="#"
+          onClick={(e) => {
+            e.preventDefault()
+            openTarget(target)
+          }}
+          className="font-mono"
+        >
+          <code {...props}>{children}</code>
+        </a>
+      )
+    }
+    return <code {...props}>{children}</code>
+  },
 }
 
 /**
- * Pre-process text to wrap bare URLs and file paths in markdown link syntax.
- * Runs before ReactMarkdown so they become <a> tags.
+ * Pre-process text to wrap bare URLs in markdown link syntax.
+ * Skips content inside backticks (code spans) — those are handled by the
+ * custom `code` component which detects paths/URLs and wraps them in <a>.
+ * File paths outside backticks are NOT linkified (too risky — would match
+ * prose like "in C:\foo"), so encourage agents to backtick file paths.
  */
 function linkifyText(text: string): string {
-  // Linkify http/https URLs not already in markdown link syntax
-  let result = text.replace(
-    /(https?:\/\/[^\s)>\]"]+)/g,
-    (match, _url, offset) => {
-      const before = result.slice(Math.max(0, offset - 2), offset)
-      if (before.endsWith('](') || before.endsWith('(')) return match
-      return `[${match}](${match})`
-    }
-  )
-  // Linkify Windows file paths like C:\foo\bar.html → file:///C:/foo/bar.html
-  result = result.replace(
-    /([A-Z]:\\[^\s*?"<>|`]+\.\w{1,10})/gi,
-    (match, _path, offset) => {
-      const before = result.slice(Math.max(0, offset - 2), offset)
-      if (before.endsWith('](') || before.endsWith('(')) return match
-      // Don't linkify if already inside a markdown link we just created
-      if (before.endsWith('[')) return match
-      const fileUrl = 'file:///' + match.replace(/\\/g, '/')
-      return `[${match}](${fileUrl})`
-    }
-  )
-  return result
+  // Split on backtick-delimited segments to avoid touching code spans
+  const segments = text.split(/(`[^`]*`)/g)
+  return segments
+    .map((seg) => {
+      if (seg.startsWith('`') && seg.endsWith('`')) return seg // leave code spans alone
+      // Linkify http/https URLs in prose
+      return seg.replace(
+        /(https?:\/\/[^\s)>\]"]+)/g,
+        (match, _url, offset, whole) => {
+          const before = whole.slice(Math.max(0, offset - 2), offset)
+          if (before.endsWith('](') || before.endsWith('(')) return match
+          return `[${match}](${match})`
+        }
+      )
+    })
+    .join('')
 }
 
 function ThinkingIndicator() {

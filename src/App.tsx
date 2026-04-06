@@ -1,10 +1,16 @@
 import { useState, useCallback } from 'react'
 import { useWebSocket, type WsStatus } from './hooks/useWebSocket.ts'
 import { useAgents } from './hooks/useAgents.ts'
+import { useNotifications } from './hooks/useNotifications.ts'
+import { useUnreadRuns } from './hooks/useUnreadRuns.ts'
 import { Sidebar } from './components/Sidebar.tsx'
 import { AgentPanel } from './components/AgentPanel.tsx'
+import { Dashboard } from './components/Dashboard.tsx'
+import { SearchBar } from './components/SearchBar.tsx'
 import { NewAgentModal } from './components/NewAgentModal.tsx'
-import type { ServerFrame } from './types.ts'
+import type { AgentSession, ServerFrame } from './types.ts'
+
+type AgentUpdates = Partial<Pick<AgentSession, 'name' | 'workdir' | 'model' | 'systemPrompt' | 'dailyCostLimitUsd' | 'runTimeoutMs'>>
 
 function ConnectionBadge({ status }: { status: WsStatus }) {
   const styles: Record<WsStatus, string> = {
@@ -26,7 +32,7 @@ function ConnectionBadge({ status }: { status: WsStatus }) {
 
 export default function App() {
   const [showNewAgentModal, setShowNewAgentModal] = useState(false)
-  const { agents, schedules, agentList, selectedAgentId, selectedAgent, handleFrame, selectAgent } = useAgents()
+  const { agents, schedules, runs, triggers, agentList, selectedAgentId, selectedAgent, handleFrame, selectAgent } = useAgents()
 
   const onFrame = useCallback((frame: ServerFrame) => {
     handleFrame(frame)
@@ -34,7 +40,18 @@ export default function App() {
 
   const { status: wsStatus, send } = useWebSocket(onFrame)
 
-  const handleCreateAgent = useCallback((opts: { name: string; workdir: string; model: string; systemPrompt?: string }) => {
+  // Fire desktop notifications when runs finish
+  useNotifications(runs, agents, selectedAgentId)
+
+  // Track unread runs per agent for sidebar badges
+  const { unreadByAgent, markViewed } = useUnreadRuns(runs, selectedAgentId)
+
+  const handleSelectAgent = useCallback((id: string) => {
+    selectAgent(id)
+    markViewed(id)
+  }, [selectAgent, markViewed])
+
+  const handleCreateAgent = useCallback((opts: { name: string; workdir: string; model: string; systemPrompt?: string; dailyCostLimitUsd?: number; runTimeoutMs?: number }) => {
     send({ type: 'create_agent', payload: opts })
     setShowNewAgentModal(false)
   }, [send])
@@ -57,7 +74,11 @@ export default function App() {
     send({ type: 'delete_agent', payload: { agentId: id } })
   }, [send, selectedAgentId])
 
-  const handleCreateSchedule = useCallback((data: { agentId: string; prompt: string; interval: string; name?: string }) => {
+  const handleUpdateAgent = useCallback((agentId: string, updates: AgentUpdates) => {
+    send({ type: 'update_agent', payload: { agentId, updates } })
+  }, [send])
+
+  const handleCreateSchedule = useCallback((data: { agentId: string; prompt: string; interval?: string; cronExpression?: string; name?: string; freshSessionPerRun?: boolean }) => {
     send({ type: 'create_schedule', payload: data })
   }, [send])
 
@@ -78,6 +99,23 @@ export default function App() {
     send({ type: 'trigger_schedule', payload: { scheduleId } })
   }, [send])
 
+  const handleCreateTrigger = useCallback((data: { agentId: string; name?: string; prompt: string; freshSessionPerRun?: boolean }) => {
+    send({ type: 'create_trigger', payload: data })
+  }, [send])
+
+  const handleStartTrigger = useCallback((triggerId: string) => {
+    send({ type: 'start_trigger', payload: { triggerId } })
+  }, [send])
+
+  const handlePauseTrigger = useCallback((triggerId: string) => {
+    send({ type: 'pause_trigger', payload: { triggerId } })
+  }, [send])
+
+  const handleDeleteTrigger = useCallback((triggerId: string) => {
+    if (!window.confirm('Delete this webhook? The URL will stop working immediately.')) return
+    send({ type: 'delete_trigger', payload: { triggerId } })
+  }, [send])
+
   return (
     <div className="flex flex-col h-screen bg-slate-950">
       {/* Top bar */}
@@ -86,7 +124,12 @@ export default function App() {
           <div className="w-2 h-2 bg-violet-500 rounded-sm" />
           <span className="text-slate-300 text-xs font-semibold tracking-tight">AgentPower</span>
         </div>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-3">
+          <SearchBar
+            agents={Array.from(agents.values())}
+            runs={Array.from(runs.values())}
+            onSelectAgent={handleSelectAgent}
+          />
           <span className="text-slate-600 text-xs">{agents.size} agent{agents.size !== 1 ? 's' : ''}</span>
           <ConnectionBadge status={wsStatus} />
         </div>
@@ -99,7 +142,9 @@ export default function App() {
           <Sidebar
             agents={agentList}
             selectedAgentId={selectedAgentId}
-            onSelectAgent={selectAgent}
+            unreadByAgent={unreadByAgent}
+            onSelectAgent={handleSelectAgent}
+            onDashboard={() => selectAgent(null)}
             onNewAgent={() => setShowNewAgentModal(true)}
           />
         </div>
@@ -110,43 +155,56 @@ export default function App() {
             <AgentPanel
               agent={selectedAgent}
               schedules={Array.from(schedules.values())}
+              runs={Array.from(runs.values())}
+              triggers={Array.from(triggers.values())}
               onSend={handleSendMessage}
               onStop={() => handleStopAgent()}
               onDelete={() => handleDeleteAgent()}
+              onUpdate={handleUpdateAgent}
               onCreateSchedule={handleCreateSchedule}
               onStartSchedule={handleStartSchedule}
               onPauseSchedule={handlePauseSchedule}
               onDeleteSchedule={handleDeleteSchedule}
               onTriggerSchedule={handleTriggerSchedule}
+              onCreateTrigger={handleCreateTrigger}
+              onStartTrigger={handleStartTrigger}
+              onPauseTrigger={handlePauseTrigger}
+              onDeleteTrigger={handleDeleteTrigger}
             />
           ) : (
-            <div className="flex flex-col items-center justify-center h-full text-slate-600 select-none gap-4">
-              <div className="text-5xl opacity-20">⬡</div>
-              <div className="text-sm">No agent selected</div>
-              <button
-                onClick={() => setShowNewAgentModal(true)}
-                className="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-xs font-medium transition-colors"
-              >
-                + Create your first agent
-              </button>
-            </div>
+            <Dashboard
+              agents={agentList}
+              runs={Array.from(runs.values())}
+              schedules={Array.from(schedules.values())}
+              triggers={Array.from(triggers.values())}
+              onSelectAgent={handleSelectAgent}
+              onNewAgent={() => setShowNewAgentModal(true)}
+            />
           )}
         </div>
       </div>
 
       {/* Mobile bottom nav */}
       <div className="sm:hidden flex items-center gap-2 px-3 py-2 border-t border-slate-800 bg-slate-900 overflow-x-auto">
-        {agentList.map(a => (
-          <button
-            key={a.id}
-            onClick={() => selectAgent(a.id)}
-            className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs transition-colors ${
-              a.id === selectedAgentId ? 'bg-violet-600 text-white' : 'bg-slate-800 text-slate-400'
-            }`}
-          >
-            {a.name}
-          </button>
-        ))}
+        {agentList.map(a => {
+          const unread = unreadByAgent.get(a.id) ?? 0
+          return (
+            <button
+              key={a.id}
+              onClick={() => handleSelectAgent(a.id)}
+              className={`relative flex-shrink-0 px-3 py-1.5 rounded-lg text-xs transition-colors ${
+                a.id === selectedAgentId ? 'bg-violet-600 text-white' : 'bg-slate-800 text-slate-400'
+              }`}
+            >
+              {a.name}
+              {unread > 0 && a.id !== selectedAgentId && (
+                <span className="absolute -top-1 -right-1 bg-violet-500 text-white text-[9px] rounded-full min-w-[14px] h-[14px] px-1 flex items-center justify-center">
+                  {unread}
+                </span>
+              )}
+            </button>
+          )
+        })}
         <button
           onClick={() => setShowNewAgentModal(true)}
           className="flex-shrink-0 px-3 py-1.5 rounded-lg text-xs bg-violet-600/20 text-violet-400 transition-colors"

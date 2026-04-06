@@ -2,9 +2,18 @@ import { EventEmitter } from 'events'
 import { promises as fs } from 'fs'
 import path from 'path'
 import os from 'os'
+import * as cron from 'node-cron'
+import type { ScheduledTask } from 'node-cron'
 import { v4 as uuid } from 'uuid'
 import type { AgentManager } from './agent-manager.js'
-import type { Schedule, ScheduleStatus, ServerFrame } from './types.js'
+import type { RunManager } from './run-manager.js'
+import type { Schedule, ServerFrame } from './types.js'
+import { resolveTemplate } from './template.js'
+
+/** A timer that can be either an interval or a cron task. */
+type ScheduleTimer =
+  | { kind: 'interval'; handle: ReturnType<typeof setInterval> }
+  | { kind: 'cron'; task: ScheduledTask }
 
 const DATA_DIR = path.join(os.homedir(), '.agentpower')
 const SCHEDULES_FILE = path.join(DATA_DIR, 'schedules.json')
@@ -39,12 +48,14 @@ export function formatInterval(ms: number): string {
 
 export class Scheduler extends EventEmitter {
   private schedules = new Map<string, Schedule>()
-  private timers = new Map<string, ReturnType<typeof setInterval>>()
+  private timers = new Map<string, ScheduleTimer>()
   private manager: AgentManager
+  private runs: RunManager
 
-  constructor(manager: AgentManager) {
+  constructor(manager: AgentManager, runs: RunManager) {
     super()
     this.manager = manager
+    this.runs = runs
   }
 
   async init() {
@@ -70,22 +81,40 @@ export class Scheduler extends EventEmitter {
   createSchedule(opts: {
     agentId: string
     prompt: string
-    intervalMs: number
+    intervalMs?: number
+    cronExpression?: string
     name?: string
+    freshSessionPerRun?: boolean
+    onCompleteAgentId?: string
+    onCompletePrompt?: string
   }): Schedule {
     // Verify the agent exists
     const agent = this.manager.getSession(opts.agentId)
     if (!agent) throw new Error(`Agent not found: ${opts.agentId}`)
+
+    // Determine mode from which fields are provided
+    const useCron = !!opts.cronExpression
+    if (useCron && !cron.validate(opts.cronExpression!)) {
+      throw new Error(`Invalid cron expression: ${opts.cronExpression}`)
+    }
+    if (!useCron && (!opts.intervalMs || opts.intervalMs <= 0)) {
+      throw new Error('Either intervalMs or cronExpression must be provided')
+    }
 
     const schedule: Schedule = {
       id: uuid(),
       agentId: opts.agentId,
       name: opts.name || `Schedule for ${agent.name}`,
       prompt: opts.prompt,
-      intervalMs: opts.intervalMs,
+      mode: useCron ? 'cron' : 'interval',
+      intervalMs: opts.intervalMs ?? 0,
+      cronExpression: opts.cronExpression,
       status: 'paused',
       runCount: 0,
       createdAt: Date.now(),
+      freshSessionPerRun: opts.freshSessionPerRun,
+      onCompleteAgentId: opts.onCompleteAgentId,
+      onCompletePrompt: opts.onCompletePrompt,
     }
 
     this.schedules.set(schedule.id, schedule)
@@ -157,20 +186,32 @@ export class Scheduler extends EventEmitter {
   private armTimer(schedule: Schedule): void {
     this.clearTimer(schedule.id)
 
-    // Run immediately on first arm, then on interval
-    this.executeSchedule(schedule)
+    if (schedule.mode === 'cron' && schedule.cronExpression) {
+      // Cron-based: fire on the cron expression, don't run immediately
+      if (!cron.validate(schedule.cronExpression)) {
+        console.error(`[scheduler] Invalid cron expression for "${schedule.name}": ${schedule.cronExpression}`)
+        return
+      }
+      const task = cron.schedule(schedule.cronExpression, () => {
+        this.executeSchedule(schedule)
+      })
+      this.timers.set(schedule.id, { kind: 'cron', task })
+      return
+    }
 
-    const timer = setInterval(() => {
+    // Interval-based: run immediately on first arm, then on interval
+    this.executeSchedule(schedule)
+    const handle = setInterval(() => {
       this.executeSchedule(schedule)
     }, schedule.intervalMs)
-
-    this.timers.set(schedule.id, timer)
+    this.timers.set(schedule.id, { kind: 'interval', handle })
   }
 
   private clearTimer(scheduleId: string): void {
     const timer = this.timers.get(scheduleId)
     if (timer) {
-      clearInterval(timer)
+      if (timer.kind === 'interval') clearInterval(timer.handle)
+      else timer.task.stop()
       this.timers.delete(scheduleId)
     }
   }
@@ -201,8 +242,22 @@ export class Scheduler extends EventEmitter {
     this.persist()
     this.broadcast({ type: 'schedule_updated', schedule })
 
+    // Resolve template variables in the prompt using agent + prior run context
+    const priorRuns = this.runs.getRuns()
+      .filter((r) => r.scheduleId === schedule.id)
+      .sort((a, b) => b.startedAt - a.startedAt)
+    const resolvedPrompt = resolveTemplate(schedule.prompt, {
+      agent,
+      schedule,
+      priorRuns,
+    })
+
     try {
-      await this.manager.sendMessage(schedule.agentId, schedule.prompt)
+      await this.manager.sendMessage(schedule.agentId, resolvedPrompt, {
+        triggeredBy: 'schedule',
+        scheduleId: schedule.id,
+        freshSession: schedule.freshSessionPerRun,
+      })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       console.error(`[scheduler] Failed to execute schedule "${schedule.name}": ${msg}`)

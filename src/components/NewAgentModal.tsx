@@ -12,13 +12,15 @@ export function NewAgentModal({
   onCreate,
 }: {
   onClose: () => void
-  onCreate: (opts: { name: string; workdir: string; model: string; systemPrompt?: string }) => void
+  onCreate: (opts: { name: string; workdir: string; model: string; systemPrompt?: string; dailyCostLimitUsd?: number; runTimeoutMs?: number }) => void
 }) {
   const [name, setName] = useState('')
   const [workdir, setWorkdir] = useState('C:\\dev')
   const [model, setModel] = useState('claude-sonnet-4-6')
   const [customModel, setCustomModel] = useState('')
   const [systemPrompt, setSystemPrompt] = useState('')
+  const [dailyCostLimit, setDailyCostLimit] = useState('5')
+  const [runTimeout, setRunTimeout] = useState('10')
   const [showAdvanced, setShowAdvanced] = useState(false)
   const nameRef = useRef<HTMLInputElement>(null)
 
@@ -30,11 +32,15 @@ export function NewAgentModal({
     e.preventDefault()
     const finalModel = model === '__custom__' ? customModel.trim() : model
     if (!finalModel) return
+    const costLimit = parseFloat(dailyCostLimit)
+    const timeoutMin = parseFloat(runTimeout)
     onCreate({
       name: name.trim() || 'Agent',
       workdir: workdir.trim() || 'C:\\dev',
       model: finalModel,
       systemPrompt: systemPrompt.trim() || undefined,
+      dailyCostLimitUsd: Number.isFinite(costLimit) && costLimit > 0 ? costLimit : undefined,
+      runTimeoutMs: Number.isFinite(timeoutMin) && timeoutMin > 0 ? Math.round(timeoutMin * 60_000) : undefined,
     })
   }
 
@@ -130,17 +136,52 @@ export function NewAgentModal({
               Advanced options
             </button>
             {showAdvanced && (
-              <div className="mt-3">
-                <label className="block text-slate-400 text-xs mb-1.5">
-                  System Prompt <span className="text-slate-600">(appended to default)</span>
-                </label>
-                <textarea
-                  value={systemPrompt}
-                  onChange={e => setSystemPrompt(e.target.value)}
-                  placeholder="Additional instructions for this agent..."
-                  rows={3}
-                  className="w-full bg-slate-800/60 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 text-sm placeholder-slate-600 outline-none focus:border-violet-500/60 transition-colors resize-y"
-                />
+              <div className="mt-3 space-y-3">
+                <div>
+                  <label className="block text-slate-400 text-xs mb-1.5">
+                    System Prompt <span className="text-slate-600">(appended to default)</span>
+                  </label>
+                  <textarea
+                    value={systemPrompt}
+                    onChange={e => setSystemPrompt(e.target.value)}
+                    placeholder="Additional instructions for this agent..."
+                    rows={3}
+                    className="w-full bg-slate-800/60 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 text-sm placeholder-slate-600 outline-none focus:border-violet-500/60 transition-colors resize-y"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-400 text-xs mb-1.5">
+                      Daily cost limit <span className="text-slate-600">(USD)</span>
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">$</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.5"
+                        value={dailyCostLimit}
+                        onChange={e => setDailyCostLimit(e.target.value)}
+                        className="w-full bg-slate-800/60 border border-slate-700 rounded-lg pl-6 pr-3 py-2 text-slate-200 text-sm outline-none focus:border-violet-500/60 transition-colors"
+                      />
+                    </div>
+                    <p className="text-slate-600 text-[10px] mt-1">0 = no limit</p>
+                  </div>
+                  <div>
+                    <label className="block text-slate-400 text-xs mb-1.5">
+                      Run timeout <span className="text-slate-600">(minutes)</span>
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={runTimeout}
+                      onChange={e => setRunTimeout(e.target.value)}
+                      className="w-full bg-slate-800/60 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 text-sm outline-none focus:border-violet-500/60 transition-colors"
+                    />
+                    <p className="text-slate-600 text-[10px] mt-1">0 = no limit</p>
+                  </div>
+                </div>
               </div>
             )}
           </div>
