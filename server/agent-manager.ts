@@ -4,6 +4,7 @@ import { v4 as uuid } from 'uuid'
 import type { AgentSession, AgentStatus, ChatItem, RunTrigger, ServerFrame } from './types.js'
 import { loadSessions, saveSessions } from './session-store.js'
 import type { RunManager } from './run-manager.js'
+import { createWorktree, removeWorktree, isGitRepo } from './worktree.js'
 
 export class AgentManager extends EventEmitter {
   private sessions = new Map<string, AgentSession>()
@@ -36,11 +37,28 @@ export class AgentManager extends EventEmitter {
     systemPrompt?: string
     dailyCostLimitUsd?: number
     runTimeoutMs?: number
+    useWorktree?: boolean
   }): AgentSession {
+    const id = uuid()
+    let workdir = opts.workdir
+    let isWorktreeSession = false
+    let worktreeSource: string | undefined
+
+    // If useWorktree is requested and the source is a git repo, create an isolated worktree
+    if (opts.useWorktree && isGitRepo(opts.workdir)) {
+      try {
+        workdir = createWorktree(opts.workdir, id)
+        isWorktreeSession = true
+        worktreeSource = opts.workdir
+      } catch (err) {
+        console.warn(`[manager] Failed to create worktree, using original workdir:`, err instanceof Error ? err.message : err)
+      }
+    }
+
     const session: AgentSession = {
-      id: uuid(),
+      id,
       name: opts.name,
-      workdir: opts.workdir,
+      workdir,
       model: opts.model,
       systemPrompt: opts.systemPrompt,
       dailyCostLimitUsd: opts.dailyCostLimitUsd,
@@ -50,6 +68,8 @@ export class AgentManager extends EventEmitter {
       createdAt: Date.now(),
       lastActiveAt: Date.now(),
       totalCostUsd: 0,
+      isWorktree: isWorktreeSession || undefined,
+      worktreeSource,
     }
     this.sessions.set(session.id, session)
     this.persist()
@@ -420,10 +440,15 @@ export class AgentManager extends EventEmitter {
   }
 
   deleteAgent(agentId: string) {
+    const session = this.sessions.get(agentId)
     const proc = this.processes.get(agentId)
     if (proc) {
       proc.kill('SIGTERM')
       this.processes.delete(agentId)
+    }
+    // Clean up git worktree if this agent had one
+    if (session?.isWorktree && session.worktreeSource) {
+      removeWorktree(session.worktreeSource, agentId)
     }
     this.sessions.delete(agentId)
     this.runs.deleteAgentRuns(agentId)

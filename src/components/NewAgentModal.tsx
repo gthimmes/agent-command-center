@@ -12,7 +12,7 @@ export function NewAgentModal({
   onCreate,
 }: {
   onClose: () => void
-  onCreate: (opts: { name: string; workdir: string; model: string; systemPrompt?: string; dailyCostLimitUsd?: number; runTimeoutMs?: number }) => void
+  onCreate: (opts: { name: string; workdir: string; model: string; systemPrompt?: string; dailyCostLimitUsd?: number; runTimeoutMs?: number; useWorktree?: boolean }) => void
 }) {
   const [name, setName] = useState('')
   const [workdir, setWorkdir] = useState('C:\\dev')
@@ -21,6 +21,7 @@ export function NewAgentModal({
   const [systemPrompt, setSystemPrompt] = useState('')
   const [dailyCostLimit, setDailyCostLimit] = useState('5')
   const [runTimeout, setRunTimeout] = useState('10')
+  const [useWorktree, setUseWorktree] = useState(false)
   const [showAdvanced, setShowAdvanced] = useState(false)
   const nameRef = useRef<HTMLInputElement>(null)
 
@@ -41,6 +42,7 @@ export function NewAgentModal({
       systemPrompt: systemPrompt.trim() || undefined,
       dailyCostLimitUsd: Number.isFinite(costLimit) && costLimit > 0 ? costLimit : undefined,
       runTimeoutMs: Number.isFinite(timeoutMin) && timeoutMin > 0 ? Math.round(timeoutMin * 60_000) : undefined,
+      useWorktree: useWorktree || undefined,
     })
   }
 
@@ -98,6 +100,25 @@ export function NewAgentModal({
               placeholder="C:\dev\my-project"
               className="w-full bg-slate-800/60 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 text-sm placeholder-slate-600 outline-none focus:border-violet-500/60 transition-colors font-mono"
             />
+          </div>
+
+          {/* Git worktree */}
+          <div>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={useWorktree}
+                onChange={e => setUseWorktree(e.target.checked)}
+                className="w-3.5 h-3.5 accent-violet-500"
+              />
+              <span className="text-slate-300 text-sm">Use git worktree</span>
+              <span className="text-slate-600 text-xs">(isolate this agent's changes)</span>
+            </label>
+            {useWorktree && (
+              <p className="text-slate-600 text-[10px] mt-1 pl-5">
+                Creates a separate git worktree from the repo above. The agent works on its own branch without affecting the main checkout.
+              </p>
+            )}
           </div>
 
           {/* Model */}

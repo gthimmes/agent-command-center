@@ -51,7 +51,7 @@ export default function App() {
     markViewed(id)
   }, [selectAgent, markViewed])
 
-  const handleCreateAgent = useCallback((opts: { name: string; workdir: string; model: string; systemPrompt?: string; dailyCostLimitUsd?: number; runTimeoutMs?: number }) => {
+  const handleCreateAgent = useCallback((opts: { name: string; workdir: string; model: string; systemPrompt?: string; dailyCostLimitUsd?: number; runTimeoutMs?: number; useWorktree?: boolean }) => {
     send({ type: 'create_agent', payload: opts })
     setShowNewAgentModal(false)
   }, [send])

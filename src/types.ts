@@ -27,6 +27,8 @@ export interface AgentSession {
   totalCostUsd: number
   dailyCostLimitUsd?: number
   runTimeoutMs?: number
+  isWorktree?: boolean
+  worktreeSource?: string
 }
 
 // --- Schedules ---

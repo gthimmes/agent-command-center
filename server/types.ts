@@ -30,6 +30,10 @@ export interface AgentSession {
   dailyCostLimitUsd?: number
   /** Max wall-clock time per run, in milliseconds. 0 or undefined = no limit. */
   runTimeoutMs?: number
+  /** If true, a git worktree was created for this agent's workdir. */
+  isWorktree?: boolean
+  /** The source repo this worktree was created from. */
+  worktreeSource?: string
 }
 
 // --- Schedules ---
@@ -134,7 +138,7 @@ export type ServerFrame =
 
 // WebSocket frames: Client -> Server
 export type ClientFrame =
-  | { type: 'create_agent'; payload: { name: string; workdir: string; model: string; systemPrompt?: string; dailyCostLimitUsd?: number; runTimeoutMs?: number } }
+  | { type: 'create_agent'; payload: { name: string; workdir: string; model: string; systemPrompt?: string; dailyCostLimitUsd?: number; runTimeoutMs?: number; useWorktree?: boolean } }
   | { type: 'update_agent'; payload: { agentId: string; updates: Partial<Pick<AgentSession, 'name' | 'workdir' | 'model' | 'systemPrompt' | 'dailyCostLimitUsd' | 'runTimeoutMs'>> } }
   | { type: 'send_message'; payload: { agentId: string; text: string } }
   | { type: 'stop_agent'; payload: { agentId: string } }

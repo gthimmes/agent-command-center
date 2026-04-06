@@ -136,7 +136,17 @@ npm run dev:server   # Server only on port 3001
 npm run dev:client   # Client only on port 5173
 npm run build        # Production build
 npm start            # Production server
+npm test             # Run all tests (unit + E2E)
+npm run test:unit    # Server-side unit tests only (node:test)
+npm run test:e2e     # Playwright E2E tests (requires dev server running)
 ```
+
+## Testing
+
+- **Unit tests** (`tests/unit/`): Pure function tests for `template.ts` (variable resolution) and `scheduler.ts` (interval parsing/formatting). Uses `node:test` — no dependencies. Run with `npm run test:unit`.
+- **E2E tests** (`tests/e2e/`): Full-stack integration tests using Playwright. Test agent lifecycle (create, update, delete, send message, run tracking), webhook triggers (HTTP POST, token auth, pause), workflow chains (schedule → chain → second agent), and UI (dashboard, search, navigation). Require `npm run dev` running. Run with `npm run test:e2e`.
+- E2E tests run **serially** (1 worker) because all tests share the WS broadcast channel — parallel runs would cause frame contamination.
+- E2E tests create and delete their own agents to avoid polluting real data.
 
 ## Code Conventions
 

@@ -97,13 +97,13 @@ All of the original critical and significant gaps have been resolved:
 6. ⏳ **Approval gates** — deferred. Cost limits + timeouts provide safety for now.
 7. ⏳ **Themes, keyboard shortcuts, mobile polish** — deferred for a UX-focused sprint.
 
-### Phase 5: Scale
+### Phase 5: Scale — ✅ (3/5 shipped)
 
-1. Multi-user + auth
-2. Git worktree isolation per agent
-3. Remote workers (distributed execution)
-4. Cross-platform (macOS, Linux)
-5. Cloud-hosted option
+1. ✅ **Token-based auth** — configurable via `AGENTPOWER_AUTH_TOKEN` env var or `~/.agentpower/auth.json`. When enabled, all HTTP API calls require `Authorization: Bearer <token>` and WS connections require the token in query string or `Sec-WebSocket-Protocol`. Auth is **disabled by default** on first launch (a token is pre-generated and printed to console, ready to enable). Webhook trigger endpoints use their own per-trigger tokens and are not double-authed.
+2. ✅ **Git worktree isolation per agent** — when creating an agent with "Use git worktree" checked, the system creates a `git worktree` at `~/.agentpower/worktrees/<shortId>` from the source repo. The agent works on its own branch (`agentpower/<shortId>`) without affecting the main checkout. Worktree is cleaned up (removed + branch deleted) when the agent is deleted. Falls back to the original workdir if the source is not a git repo. `isWorktree` badge shown in agent header.
+3. ✅ **Cross-platform file opening** — `/api/open` now uses `cmd /c start` on Windows, `open` on macOS, and `xdg-open` on Linux.
+4. ⏳ **Remote workers** — deferred. Single-machine is sufficient for current use cases.
+5. ⏳ **Cloud-hosted option** — deferred. Requires auth + multi-user first.
 
 ---
 
@@ -116,6 +116,8 @@ All of the original critical and significant gaps have been resolved:
 **Phase 3 shipped (core)** — Coordination & Events (webhook triggers, agent workflow chains).
 
 **Phase 4 shipped (core)** — Command Center Polish (global dashboard, activity feed, search).
+
+**Phase 5 shipped (core)** — Scale (token auth, git worktree isolation, cross-platform file opening).
 
 AgentPower is now a complete agent orchestration platform. You can:
 - Create an agent scoped to a project with a persistent context/system prompt
@@ -130,5 +132,7 @@ AgentPower is now a complete agent orchestration platform. You can:
 - See a clean run history with summaries, costs, durations, and chain lineage (parentRunId)
 - Get desktop notifications when runs finish
 - Trust that daily cost limits and run timeouts will keep it safe
+- **Lock it down** with token-based auth when you're ready
+- **Isolate agents** with git worktrees so they don't step on each other's files
 
-**Next up: Phase 5 — Scale.** Multi-user + auth, git worktree isolation, remote workers, cross-platform, cloud hosting.
+All five phases are now shipped. Remaining backlog items are tracked in the deferred sections above.

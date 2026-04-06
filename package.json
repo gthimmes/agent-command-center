@@ -7,7 +7,11 @@
     "dev:server": "tsx watch server/index.ts",
     "dev:client": "vite",
     "build": "vite build",
-    "start": "tsx server/index.ts"
+    "start": "tsx server/index.ts",
+    "test": "npm run test:unit && npm run test:e2e",
+    "test:unit": "tsx --test tests/unit/*.test.ts",
+    "test:e2e": "npx playwright test",
+    "test:e2e:headed": "npx playwright test --headed"
   },
   "dependencies": {
     "express": "^4.19.2",

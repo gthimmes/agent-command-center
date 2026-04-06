@@ -178,6 +178,28 @@ server/                           # Node.js backend
 | `npm run dev:client` | Start frontend only (port 5173) |
 | `npm run build` | Build for production |
 | `npm start` | Run production server |
+| `npm test` | Run all tests (unit + E2E) |
+| `npm run test:unit` | Run server-side unit tests only |
+| `npm run test:e2e` | Run Playwright E2E tests (requires dev server running) |
+
+## Testing
+
+### Unit Tests (20 tests)
+Server-side pure function tests using Node's built-in test runner (`node:test`):
+- **Template variable resolution** — `{{date}}`, `{{agent_name}}`, `{{last_run_summary}}`, unknown vars, multi-var strings
+- **Interval parsing** — seconds, minutes, hours, days, bare numbers, whitespace, invalid input
+- **Interval formatting** — round-trip from ms to human-readable
+
+### E2E Tests (13 tests)
+Full-stack integration tests using Playwright, exercising the real WS protocol and Claude CLI:
+- **Agent lifecycle** — create, update, delete via WS frames
+- **Run creation** — send message → run_started → run_updated with summary + cost
+- **Cost limit enforcement** — agent with $0.0001 limit → second run skipped with error
+- **Dashboard** — stats render, agent cards present, Ctrl+K search works, card click navigates
+- **Webhook triggers** — HTTP POST fires agent with payload, bad token → 404, paused → 409
+- **Workflow chains** — schedule with `onComplete` → Agent A completes → Agent B fires with summary
+
+E2E tests require `npm run dev` to be running. They create and delete their own test agents.
 
 ## Data Files
 

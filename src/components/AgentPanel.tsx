@@ -80,6 +80,14 @@ export function AgentPanel({
             {agent.status}
           </span>
           <span className="text-slate-600 text-xs flex-shrink-0 hidden sm:block">{shortModel}</span>
+          {agent.isWorktree && (
+            <span
+              title={`Git worktree from ${agent.worktreeSource}`}
+              className="text-[9px] bg-cyan-500/20 text-cyan-400 px-1.5 py-0.5 rounded-full flex-shrink-0 hidden sm:block"
+            >
+              worktree
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-1.5 flex-shrink-0">

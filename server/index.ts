@@ -9,6 +9,7 @@ import { AgentManager } from './agent-manager.js'
 import { Scheduler, parseInterval } from './scheduler.js'
 import { RunManager } from './run-manager.js'
 import { TriggerManager } from './trigger-manager.js'
+import { initAuth, authMiddleware, authWsUpgrade } from './auth.js'
 import type { ClientFrame, ServerFrame } from './types.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -81,7 +82,12 @@ runs.on('run_finished', async (run) => {
   }
 })
 
-wss.on('connection', (ws) => {
+wss.on('connection', (ws, req) => {
+  // Check auth on WebSocket connections
+  if (!authWsUpgrade(req)) {
+    ws.close(4401, 'Unauthorized')
+    return
+  }
   console.log('[ws] Client connected')
 
   // Send full state to newly connected client
@@ -213,6 +219,7 @@ wss.on('connection', (ws) => {
 
 // Open a local file or URL with the OS default handler
 app.use(express.json())
+app.use(authMiddleware)
 app.post('/api/open', (req, res) => {
   const target = typeof req.body?.target === 'string' ? req.body.target.trim() : ''
   if (!target) {
@@ -232,9 +239,22 @@ app.post('/api/open', (req, res) => {
 
   console.log(`[open] ${toOpen}`)
 
-  // Windows: `start "" "path"` opens with default handler
-  // The empty "" is the window title, required when path contains spaces
-  const proc = spawn('cmd', ['/c', 'start', '""', toOpen], {
+  // Cross-platform: use the OS default handler to open a file/URL
+  const platform = process.platform
+  let cmd: string
+  let args: string[]
+  if (platform === 'win32') {
+    cmd = 'cmd'
+    args = ['/c', 'start', '""', toOpen]
+  } else if (platform === 'darwin') {
+    cmd = 'open'
+    args = [toOpen]
+  } else {
+    cmd = 'xdg-open'
+    args = [toOpen]
+  }
+
+  const proc = spawn(cmd, args, {
     detached: true,
     stdio: 'ignore',
     windowsHide: true,
@@ -288,7 +308,8 @@ app.get('*', (_req, res) => {
   res.sendFile(path.join(distPath, 'index.html'))
 })
 
-runs.init()
+initAuth()
+  .then(() => runs.init())
   .then(() => manager.init())
   .then(() => scheduler.init())
   .then(() => triggers.init())
