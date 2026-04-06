@@ -79,7 +79,7 @@ export class AgentManager extends EventEmitter {
   /** Update mutable fields on an agent session. Broadcasts the updated agent. */
   updateSession(
     agentId: string,
-    updates: Partial<Pick<AgentSession, 'name' | 'workdir' | 'model' | 'systemPrompt' | 'dailyCostLimitUsd' | 'runTimeoutMs'>>,
+    updates: Partial<Pick<AgentSession, 'name' | 'workdir' | 'model' | 'systemPrompt' | 'dailyCostLimitUsd' | 'runTimeoutMs' | 'slackWebhookUrl' | 'slackNotifyOn'>>,
   ): AgentSession {
     const session = this.sessions.get(agentId)
     if (!session) throw new Error(`Agent not found: ${agentId}`)
@@ -93,6 +93,12 @@ export class AgentManager extends EventEmitter {
     }
     if (updates.runTimeoutMs !== undefined) {
       session.runTimeoutMs = updates.runTimeoutMs > 0 ? updates.runTimeoutMs : undefined
+    }
+    if (updates.slackWebhookUrl !== undefined) {
+      session.slackWebhookUrl = updates.slackWebhookUrl || undefined
+    }
+    if (updates.slackNotifyOn !== undefined) {
+      session.slackNotifyOn = updates.slackNotifyOn?.length ? updates.slackNotifyOn : undefined
     }
 
     this.persist()

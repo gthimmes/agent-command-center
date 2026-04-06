@@ -29,7 +29,11 @@ export interface AgentSession {
   runTimeoutMs?: number
   isWorktree?: boolean
   worktreeSource?: string
+  slackWebhookUrl?: string
+  slackNotifyOn?: SlackNotifyEvent[]
 }
+
+export type SlackNotifyEvent = 'completed' | 'failed' | 'skipped' | 'cancelled'
 
 // --- Schedules ---
 

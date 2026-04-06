@@ -88,6 +88,14 @@ export function AgentPanel({
               worktree
             </span>
           )}
+          {agent.slackWebhookUrl && (
+            <span
+              title="Slack notifications enabled"
+              className="text-[9px] bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded-full flex-shrink-0 hidden sm:block"
+            >
+              slack
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-1.5 flex-shrink-0">

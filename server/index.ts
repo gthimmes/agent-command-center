@@ -10,6 +10,7 @@ import { Scheduler, parseInterval } from './scheduler.js'
 import { RunManager } from './run-manager.js'
 import { TriggerManager } from './trigger-manager.js'
 import { initAuth, authMiddleware, authWsUpgrade } from './auth.js'
+import { sendSlackNotification } from './slack.js'
 import type { ClientFrame, ServerFrame } from './types.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -79,6 +80,14 @@ runs.on('run_finished', async (run) => {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     console.error(`[chain] Failed to fire chain: ${msg}`)
+  }
+})
+
+// Slack notifications on run completion/failure
+runs.on('run_finished', async (run) => {
+  const agent = manager.getSession(run.agentId)
+  if (agent?.slackWebhookUrl) {
+    sendSlackNotification(agent, run).catch(() => {})
   }
 })
 

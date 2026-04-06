@@ -34,7 +34,13 @@ export interface AgentSession {
   isWorktree?: boolean
   /** The source repo this worktree was created from. */
   worktreeSource?: string
+  /** Slack incoming webhook URL for notifications. */
+  slackWebhookUrl?: string
+  /** Which events trigger a Slack notification. Defaults to ['completed', 'failed']. */
+  slackNotifyOn?: SlackNotifyEvent[]
 }
+
+export type SlackNotifyEvent = 'completed' | 'failed' | 'skipped' | 'cancelled'
 
 // --- Schedules ---
 
@@ -139,7 +145,7 @@ export type ServerFrame =
 // WebSocket frames: Client -> Server
 export type ClientFrame =
   | { type: 'create_agent'; payload: { name: string; workdir: string; model: string; systemPrompt?: string; dailyCostLimitUsd?: number; runTimeoutMs?: number; useWorktree?: boolean } }
-  | { type: 'update_agent'; payload: { agentId: string; updates: Partial<Pick<AgentSession, 'name' | 'workdir' | 'model' | 'systemPrompt' | 'dailyCostLimitUsd' | 'runTimeoutMs'>> } }
+  | { type: 'update_agent'; payload: { agentId: string; updates: Partial<Pick<AgentSession, 'name' | 'workdir' | 'model' | 'systemPrompt' | 'dailyCostLimitUsd' | 'runTimeoutMs' | 'slackWebhookUrl' | 'slackNotifyOn'>> } }
   | { type: 'send_message'; payload: { agentId: string; text: string } }
   | { type: 'stop_agent'; payload: { agentId: string } }
   | { type: 'delete_agent'; payload: { agentId: string } }

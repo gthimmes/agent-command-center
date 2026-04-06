@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { AgentSession } from '../types.ts'
+import type { AgentSession, SlackNotifyEvent } from '../types.ts'
 
 const DEFAULT_MODELS = [
   'claude-sonnet-4-6',
@@ -8,7 +8,14 @@ const DEFAULT_MODELS = [
   'claude-sonnet-4-5',
 ]
 
-type Updates = Partial<Pick<AgentSession, 'name' | 'workdir' | 'model' | 'systemPrompt' | 'dailyCostLimitUsd' | 'runTimeoutMs'>>
+const NOTIFY_EVENTS: { value: SlackNotifyEvent; label: string }[] = [
+  { value: 'completed', label: 'Run completed' },
+  { value: 'failed', label: 'Run failed' },
+  { value: 'skipped', label: 'Run skipped (cost limit)' },
+  { value: 'cancelled', label: 'Run cancelled (timeout)' },
+]
+
+type Updates = Partial<Pick<AgentSession, 'name' | 'workdir' | 'model' | 'systemPrompt' | 'dailyCostLimitUsd' | 'runTimeoutMs' | 'slackWebhookUrl' | 'slackNotifyOn'>>
 
 export function AgentSettingsModal({
   agent,
@@ -34,6 +41,10 @@ export function AgentSettingsModal({
   const [runTimeout, setRunTimeout] = useState(
     agent.runTimeoutMs != null ? String(Math.round(agent.runTimeoutMs / 60_000)) : '0',
   )
+  const [slackUrl, setSlackUrl] = useState(agent.slackWebhookUrl ?? '')
+  const [slackEvents, setSlackEvents] = useState<Set<SlackNotifyEvent>>(
+    new Set(agent.slackNotifyOn ?? ['completed', 'failed']),
+  )
 
   const nameRef = useRef<HTMLInputElement>(null)
 
@@ -54,6 +65,8 @@ export function AgentSettingsModal({
       systemPrompt: systemPrompt.trim() ? systemPrompt : '',
       dailyCostLimitUsd: Number.isFinite(costLimit) && costLimit > 0 ? costLimit : 0,
       runTimeoutMs: Number.isFinite(timeoutMin) && timeoutMin > 0 ? Math.round(timeoutMin * 60_000) : 0,
+      slackWebhookUrl: slackUrl.trim() || '',
+      slackNotifyOn: Array.from(slackEvents) as SlackNotifyEvent[],
     })
   }
 
@@ -173,6 +186,49 @@ export function AgentSettingsModal({
               />
               <p className="text-slate-600 text-[10px] mt-1">0 = no limit</p>
             </div>
+          </div>
+
+          {/* Slack notifications */}
+          <div className="border-t border-slate-800 pt-4 mt-2">
+            <h3 className="text-slate-300 text-xs font-semibold mb-3">Slack Notifications</h3>
+            <div>
+              <label className="block text-slate-400 text-xs mb-1.5">
+                Incoming Webhook URL
+              </label>
+              <input
+                type="url"
+                value={slackUrl}
+                onChange={e => setSlackUrl(e.target.value)}
+                placeholder="https://hooks.slack.com/services/T.../B.../..."
+                className="w-full bg-slate-800/60 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 text-sm placeholder-slate-600 outline-none focus:border-violet-500/60 transition-colors font-mono text-xs"
+              />
+              <p className="text-slate-600 text-[10px] mt-1">
+                Create one at <span className="text-slate-500">Slack &gt; Apps &gt; Incoming Webhooks</span>. Leave empty to disable.
+              </p>
+            </div>
+            {slackUrl && (
+              <div className="mt-3">
+                <label className="block text-slate-400 text-xs mb-2">Notify on</label>
+                <div className="flex flex-wrap gap-2">
+                  {NOTIFY_EVENTS.map(ev => (
+                    <label key={ev.value} className="flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={slackEvents.has(ev.value)}
+                        onChange={e => {
+                          const next = new Set(slackEvents)
+                          if (e.target.checked) next.add(ev.value)
+                          else next.delete(ev.value)
+                          setSlackEvents(next)
+                        }}
+                        className="w-3 h-3 accent-violet-500"
+                      />
+                      <span className="text-slate-400 text-xs">{ev.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="flex gap-2 pt-1">
