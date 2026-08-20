@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "express": "^4.19.2",
+    "help-navigator": "github:gthimmes/help-navigator",
     "node-cron": "^4.2.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

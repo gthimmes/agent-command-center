@@ -8,6 +8,7 @@ import { AgentPanel } from './components/AgentPanel.tsx'
 import { Dashboard } from './components/Dashboard.tsx'
 import { SearchBar } from './components/SearchBar.tsx'
 import { NewAgentModal } from './components/NewAgentModal.tsx'
+import { HelpWidget } from './components/HelpWidget.tsx'
 import type { AgentSession, ServerFrame } from './types.ts'
 
 type AgentUpdates = Partial<Pick<AgentSession, 'name' | 'workdir' | 'model' | 'systemPrompt' | 'dailyCostLimitUsd' | 'runTimeoutMs'>>
@@ -220,6 +221,13 @@ export default function App() {
           onCreate={handleCreateAgent}
         />
       )}
+
+      {/* In-app help center (floating launcher, F1) */}
+      <HelpWidget
+        pathname={
+          showNewAgentModal ? '/agents/new' : selectedAgent ? `/agents/${selectedAgent.id}` : '/'
+        }
+      />
     </div>
   )
 }
