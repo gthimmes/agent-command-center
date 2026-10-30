@@ -30,7 +30,7 @@ test.describe('Dashboard & Search', () => {
     await page.waitForTimeout(1500)
 
     // Search bar exists
-    const searchInput = page.locator('input[placeholder*="Search"]')
+    const searchInput = page.getByPlaceholder('Search agents, runs, chat...')
     await expect(searchInput).toBeVisible()
 
     // Ctrl+K focuses it
